@@ -8,7 +8,13 @@ This file provides foundational guidance for AI agents working on the Planaro pr
 2. **Monorepo Structure:** Keep frontend and backend concerns separated in their respective directories but within the same repository.
 3. **Type Safety:** Maintain strict TypeScript definitions for all data models and API responses.
 4. **Shadcn UI:** Follow Shadcn UI patterns for component development. Use Tailwind CSS for all styling.
-5. **Supabase Integration:** Use the Supabase client singleton for all backend interactions.
+## Supabase Integration
+
+- **Local-First Development:** Always use the Supabase CLI for backend development. Never make schema changes directly in the Supabase Dashboard SQL editor.
+- **Migrations:** All database changes must be captured in migration files located in `backend/supabase/migrations/`. Use `supabase migration new <name>` to create them.
+- **Deployment:** Use `supabase db push` to apply local migrations to the production environment.
+- **Edge Functions:** Logic that requires server-side execution (e.g., background calendar syncing) should be implemented as Supabase Edge Functions in `backend/supabase/functions/`.
+- **Client Singleton:** Use the Supabase client singleton (`@/lib/supabase/client`) for all frontend interactions.
 
 ## Data Fetching & State
 
