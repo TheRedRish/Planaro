@@ -20,25 +20,27 @@ export async function fetchRoutines() {
   return data as Routine[];
 }
 
-export async function addRoutine(name: string, startTime: string, endTime: string, daysOfWeek: number[] = [1, 2, 3, 4, 5]) {
+export async function addRoutines(routines: Omit<Routine, 'id' | 'user_id' | 'created_at'>[]) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('User not authenticated');
 
   const { data, error } = await supabase
     .from('routines')
-    .insert([
-      {
+    .insert(
+      routines.map((r) => ({
+        ...r,
         user_id: user.id,
-        name,
-        start_time: startTime,
-        end_time: endTime,
-        days_of_week: daysOfWeek,
-      },
-    ])
+      }))
+    )
     .select();
 
   if (error) throw error;
-  return data[0] as Routine;
+  return data as Routine[];
+}
+
+export async function addRoutine(name: string, startTime: string, endTime: string, daysOfWeek: number[] = [1, 2, 3, 4, 5]) {
+  const results = await addRoutines([{ name, start_time: startTime, end_time: endTime, days_of_week: daysOfWeek }]);
+  return results[0];
 }
 
 export async function deleteRoutine(routineId: string) {

@@ -8,6 +8,8 @@ export interface Task {
   duration_minutes: number;
   condition_tags: string[];
   status: 'staged' | 'scheduled' | 'completed';
+  google_event_id?: string;
+  google_calendar_id?: string;
   created_at: string;
 }
 
@@ -17,6 +19,16 @@ export async function fetchStagedTasks() {
     .select('*')
     .eq('status', 'staged')
     .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data as Task[];
+}
+
+export async function fetchScheduledTasks() {
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('status', 'scheduled');
 
   if (error) throw error;
   return data as Task[];
@@ -52,11 +64,15 @@ export async function deleteTask(taskId: string) {
   if (error) throw error;
 }
 
-export async function updateTaskStatus(taskId: string, status: 'staged' | 'scheduled' | 'completed') {
+export async function updateTask(taskId: string, updates: Partial<Task>) {
   const { error } = await supabase
     .from('tasks')
-    .update({ status })
+    .update(updates)
     .eq('id', taskId);
 
   if (error) throw error;
+}
+
+export async function updateTaskStatus(taskId: string, status: 'staged' | 'scheduled' | 'completed') {
+  await updateTask(taskId, { status });
 }

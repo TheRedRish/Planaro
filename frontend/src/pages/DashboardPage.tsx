@@ -1,11 +1,14 @@
-import { useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Loader2, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StagingArea } from '@/components/StagingArea';
 import { CalendarPreview } from '@/components/CalendarPreview';
 import { useGoogleCalendar } from '@/hooks/useGoogleCalendar';
 import { useScheduling } from '@/hooks/useScheduling';
 import { useWeather } from '@/hooks/useWeather';
+import { fetchScheduledTasks } from '@/services/tasks';
+import { cn } from '@/utils/cn';
 import type { Session } from '@supabase/supabase-js';
 
 interface DashboardPageProps {
@@ -13,22 +16,37 @@ interface DashboardPageProps {
 }
 
 export function DashboardPage({ session }: DashboardPageProps) {
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const { weather } = useWeather();
+
+  const { data: scheduledTasks = [] } = useQuery({
+    queryKey: ['tasks', 'scheduled'],
+    queryFn: fetchScheduledTasks,
+  });
+
   const { 
     events, 
     syncing, 
     sync, 
     lockEvent, 
-    lockingEventId 
+    lockingEventId,
+    unschedulePlanaroEvent,
+    deletePlanaroEvent,
+    actingEventId
   } = useGoogleCalendar(session.provider_token ?? undefined);
 
   const {
-    selectedTask,
-    setSelectedTask,
+    reviewQueue,
+    currentReviewIndex,
+    currentTask,
     proposals,
+    selectedProposal,
+    setSelectedProposal,
+    batchPlan,
     committing,
-    scheduleTask,
-    commitProposal
+    startReview,
+    confirmSelection,
+    cancelReview
   } = useScheduling({
     accessToken: session.provider_token ?? undefined,
     calendarEvents: events,
@@ -43,46 +61,82 @@ export function DashboardPage({ session }: DashboardPageProps) {
   }, [session.provider_token, sync]);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-[calc(100vh-8rem)]">
-      <StagingArea onSchedule={scheduleTask} />
-      <div className="flex flex-col gap-4 overflow-hidden">
+    <div className="flex gap-4 h-[calc(100vh-8rem)] relative overflow-hidden">
+      {/* Sidebar / Staging Area */}
+      <div 
+        className={cn(
+          "transition-all duration-300 ease-in-out flex-none overflow-hidden border rounded-lg bg-card shadow-sm",
+          sidebarOpen ? "w-80 opacity-100" : "w-0 opacity-0 border-none"
+        )}
+      >
+        <div className="w-80 h-full">
+          <StagingArea 
+            onSchedule={(t) => startReview([t])} 
+            onScheduleBatch={startReview} 
+          />
+        </div>
+      </div>
+
+      {/* Main Content / Calendar */}
+      <div className="flex-1 flex flex-col gap-4 overflow-hidden relative">
+        {/* Toggle Sidebar Button */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute -left-2 top-4 z-30 h-8 w-8 rounded-full border bg-background shadow-sm hover:bg-accent"
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+        >
+          {sidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+        </Button>
+
         <CalendarPreview
           events={events}
+          proposals={proposals}
+          selectedProposal={selectedProposal}
+          batchPlan={batchPlan}
+          selectedTask={currentTask}
+          scheduledTasks={scheduledTasks}
+          onSelectProposal={setSelectedProposal}
           syncing={syncing}
           onSync={sync}
           onLock={lockEvent}
           lockingEventId={lockingEventId}
+          onUnschedule={unschedulePlanaroEvent}
+          onDelete={deletePlanaroEvent}
+          actingEventId={actingEventId}
         />
-        {selectedTask && (
-          <div className="bg-card border rounded-lg p-4">
-            <h3 className="font-semibold mb-2 flex items-center justify-between text-sm">
-              Proposals for: {selectedTask.title}
-              {committing && <Loader2 className="h-3 w-3 animate-spin" />}
-            </h3>
-            <div className="flex flex-col gap-2">
-              {proposals.map((p, i) => (
-                <Button
-                  key={i}
-                  variant="outline"
-                  size="sm"
-                  className="justify-start text-xs"
-                  onClick={() => commitProposal(p)}
-                  disabled={committing}
-                >
-                  {p.start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {' '}
-                  {p.end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </Button>
-              ))}
-              {proposals.length === 0 && (
-                <p className="text-xs text-muted-foreground italic">
-                  No slots available today.
-                </p>
-              )}
+        
+        {/* Proposals Selection Header */}
+        {reviewQueue.length > 0 && currentTask && (
+          <div className="absolute right-4 bottom-4 bg-primary text-primary-foreground px-4 py-2 rounded-xl shadow-lg z-40 flex items-center gap-4 animate-in fade-in slide-in-from-bottom-2 border border-primary-foreground/20">
+            <div className="flex flex-col">
+              <span className="text-[10px] font-bold uppercase tracking-widest opacity-70 leading-none mb-1">
+                Previewing {currentReviewIndex + 1} of {reviewQueue.length}
+              </span>
+              <span className="text-sm font-bold truncate max-w-[200px]">
+                {currentTask.title}
+              </span>
+            </div>
+            
+            <div className="h-8 w-px bg-primary-foreground/20" />
+            
+            <div className="flex gap-2 items-center">
+              <Button
+                size="sm"
+                variant="secondary"
+                className="h-8 px-4 text-xs font-bold uppercase tracking-wider"
+                onClick={confirmSelection}
+                disabled={committing || !selectedProposal}
+              >
+                {committing ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : null}
+                {currentReviewIndex + 1 < reviewQueue.length ? "Confirm & Next" : "Confirm Plan"}
+              </Button>
+              
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setSelectedTask(null)}
-                className="mt-2 text-xs"
+                onClick={cancelReview}
+                className="h-8 px-3 text-xs hover:bg-primary-foreground/10 text-primary-foreground"
                 disabled={committing}
               >
                 Cancel

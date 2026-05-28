@@ -154,6 +154,25 @@ export async function createEvent(
   return response.json();
 }
 
+export async function deleteEvent(
+  accessToken: string,
+  calendarId: string,
+  eventId: string
+): Promise<void> {
+  const url = `${GOOGLE_CALENDAR_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`;
+  
+  const response = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok && response.status !== 404) {
+    throw new Error(`Failed to delete event: ${response.statusText}`);
+  }
+}
+
 export async function moveEvent(
   accessToken: string,
   calendarId: string,

@@ -1,6 +1,10 @@
+import { isWeatherFavorable, type WeatherForecast } from '@/services/weather-provider';
+
 export interface TimeSlot {
   start: Date;
   end: Date;
+  logicTags?: string[]; // e.g., ['weather', 'routine']
+  taskId?: string;
 }
 
 export interface BusyBlock {
@@ -90,31 +94,93 @@ export function generateProposals(
   const proposals: TimeSlot[] = [];
   const durationMs = taskDurationMinutes * 60 * 1000;
 
+  // Track the days we have already selected a proposal on, to encourage spreading out
+  const usedDays = new Set<string>();
+
+  // Extract all possible discrete non-overlapping sub-slots from all large free slots
+  const allSubSlots: TimeSlot[] = [];
   for (const slot of slots) {
-    if (proposals.length >= 3) break;
-
-    // For simplicity, take the start of the free slot as a proposal
-    proposals.push({
-      start: new Date(slot.start),
-      end: new Date(slot.start.getTime() + durationMs),
-    });
-
-    // If the slot is long enough, maybe take another one from the middle or end
-    const slotDuration = slot.end.getTime() - slot.start.getTime();
-    if (slotDuration >= durationMs * 3 && proposals.length < 3) {
-      proposals.push({
-        start: new Date(slot.start.getTime() + slotDuration / 2),
-        end: new Date(slot.start.getTime() + slotDuration / 2 + durationMs),
+    let currentStart = slot.start.getTime();
+    while (currentStart + durationMs <= slot.end.getTime()) {
+      allSubSlots.push({
+        start: new Date(currentStart),
+        end: new Date(currentStart + durationMs)
       });
-    }
-    
-    if (slotDuration >= durationMs * 2 && proposals.length < 3) {
-      proposals.push({
-        start: new Date(slot.end.getTime() - durationMs),
-        end: new Date(slot.end),
-      });
+      // Jump by duration to avoid overlapping sub-slots within the same free block
+      currentStart += durationMs; 
     }
   }
 
-  return proposals.slice(0, 3);
+  // First pass: try to get one proposal per day
+  for (const subSlot of allSubSlots) {
+    if (proposals.length >= 3) break;
+    const dayKey = subSlot.start.toISOString().split('T')[0];
+    if (!usedDays.has(dayKey)) {
+      proposals.push(subSlot);
+      usedDays.add(dayKey);
+    }
+  }
+
+  // Second pass: if we still need proposals, just take the earliest available that aren't already in proposals
+  if (proposals.length < 3) {
+    for (const subSlot of allSubSlots) {
+      if (proposals.length >= 3) break;
+      const isAlreadyIncluded = proposals.some(p => p.start.getTime() === subSlot.start.getTime());
+      if (!isAlreadyIncluded) {
+        proposals.push(subSlot);
+      }
+    }
+  }
+
+  // Sort them chronologically
+  return proposals.sort((a, b) => a.start.getTime() - b.start.getTime());
+}
+
+/**
+ * Schedules a batch of tasks sequentially, ensuring no overlaps.
+ */
+export function scheduleBatch(
+  tasks: { id: string; duration_minutes: number; condition_tags?: string[] }[],
+  initialBusyBlocks: BusyBlock[],
+  startBound: Date,
+  endBound: Date,
+  weather: WeatherForecast[]
+): TimeSlot[] {
+  const plan: TimeSlot[] = [];
+  let currentBusy = [...initialBusyBlocks];
+
+  for (const task of tasks) {
+    const isOutdoor = task.condition_tags?.includes('Outdoor');
+    const weatherCheck = isOutdoor 
+      ? (time: Date) => isWeatherFavorable(weather, time)
+      : undefined;
+
+    const freeSlots = findFreeSlots(currentBusy, startBound, endBound, task.duration_minutes, weatherCheck);
+    const proposals = generateProposals(freeSlots, task.duration_minutes);
+
+    if (proposals.length > 0) {
+      // Pick the first proposal for the plan
+      const selected = proposals[0];
+      const proposalWithMetadata = { 
+        ...selected, 
+        taskId: task.id,
+        logicTags: [
+          'routine',
+          ...(isOutdoor && isWeatherFavorable(weather, selected.start) ? ['weather'] : [])
+        ]
+      };
+      plan.push(proposalWithMetadata);
+
+      // Add this proposal to busy blocks for the next task in batch
+      currentBusy.push({
+        start: selected.start,
+        end: selected.end,
+        title: `Plan: ${task.id}`,
+      });
+      // Re-merge to keep it clean
+      currentBusy = mergeBusyBlocks(currentBusy);
+    }
+  }
+
+  return plan;
 }

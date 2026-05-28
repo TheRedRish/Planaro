@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchProfile, updateOnboardingStep } from '@/services/profiles';
+import { fetchProfile, updateOnboardingStep, updatePlanaroCalendarId } from '@/services/profiles';
 
 export function useProfile(enabled: boolean = true) {
   const queryClient = useQueryClient();
@@ -8,10 +8,18 @@ export function useProfile(enabled: boolean = true) {
     queryKey: ['profile'],
     queryFn: fetchProfile,
     enabled,
+    retry: false,
   });
 
-  const mutation = useMutation({
+  const stepMutation = useMutation({
     mutationFn: updateOnboardingStep,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+    },
+  });
+
+  const calendarIdMutation = useMutation({
+    mutationFn: updatePlanaroCalendarId,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profile'] });
     },
@@ -21,7 +29,8 @@ export function useProfile(enabled: boolean = true) {
     profile,
     isLoading,
     error,
-    updateOnboardingStep: mutation.mutate,
-    isUpdating: mutation.isPending,
+    updateOnboardingStep: stepMutation.mutate,
+    updatePlanaroCalendarId: calendarIdMutation.mutate,
+    isUpdating: stepMutation.isPending || calendarIdMutation.isPending,
   };
 }

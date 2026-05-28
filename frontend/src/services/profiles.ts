@@ -10,6 +10,7 @@ export type OnboardingStep =
 export interface Profile {
   id: string;
   onboarding_step: OnboardingStep;
+  planaro_calendar_id?: string;
   // Add other profile fields if needed
 }
 
@@ -19,7 +20,7 @@ export async function fetchProfile(): Promise<Profile> {
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, onboarding_step')
+    .select('id, onboarding_step, planaro_calendar_id')
     .eq('id', user.id)
     .single();
 
@@ -38,6 +39,18 @@ export async function updateOnboardingStep(step: OnboardingStep) {
   const { error } = await supabase
     .from('profiles')
     .update({ onboarding_step: step })
+    .eq('id', user.id);
+
+  if (error) throw error;
+}
+
+export async function updatePlanaroCalendarId(calendarId: string) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('User not authenticated');
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ planaro_calendar_id: calendarId })
     .eq('id', user.id);
 
   if (error) throw error;
