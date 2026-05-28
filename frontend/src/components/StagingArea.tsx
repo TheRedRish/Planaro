@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { fetchStagedTasks, addTask, deleteTask, type Task } from "@/lib/tasks"
+import { fetchStagedTasks, addTask, deleteTask, type Task } from "@/services/tasks";
 import { Button } from "./ui/button"
 import { Loader2, Plus, Trash2, ListChecks, CalendarRange, CalendarDays, CloudSun, Settings } from "lucide-react"
 import { RoutineManager } from "./RoutineManager"

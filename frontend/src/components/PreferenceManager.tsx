@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { fetchPreferences, updatePreferences, type UserPreferences } from "@/lib/preferences"
+import { fetchPreferences, updatePreferences, type UserPreferences } from "@/services/preferences";
 import { Button } from "./ui/button"
 import { Loader2, Save, FileJson } from "lucide-react"
 

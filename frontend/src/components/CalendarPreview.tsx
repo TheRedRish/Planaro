@@ -1,5 +1,5 @@
 import { Button } from "./ui/button"
-import type { GoogleEvent } from "@/lib/google-calendar"
+import type { GoogleEvent } from "@/services/google-calendar";
 import { Lock, Loader2 } from "lucide-react"
 
 interface CalendarPreviewProps {

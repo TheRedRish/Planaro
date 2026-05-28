@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { fetchRoutines, addRoutine, deleteRoutine, type Routine } from "@/lib/routines"
+import { fetchRoutines, addRoutine, deleteRoutine, type Routine } from "@/services/routines";
 import { Button } from "./ui/button"
 import { Loader2, Plus, Trash2, Clock } from "lucide-react"
 
