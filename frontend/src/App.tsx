@@ -1,18 +1,25 @@
 import { useAuth } from "@/hooks/useAuth";
+import { useProfile } from "@/hooks/useProfile";
 import { Button } from "@/components/ui/button";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { LandingPage } from "@/pages/LandingPage";
+import { OnboardingPage } from "@/pages/OnboardingPage";
 
 function App() {
-  const { session, loading, login, logout } = useAuth();
+  const { session, loading: authLoading, login, logout } = useAuth();
+  const { profile, isLoading: profileLoading } = useProfile(!!session);
+
+  const loading = authLoading || (session && profileLoading);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        Loading...
+        <div className="animate-pulse text-muted-foreground">Loading Planaro...</div>
       </div>
     );
   }
+
+  const showOnboarding = session && profile && profile.onboarding_step !== 'completed';
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
@@ -38,7 +45,11 @@ function App() {
       {/* Main Content */}
       <main className="flex-1 overflow-hidden p-4">
         {session ? (
-          <DashboardPage session={session} />
+          showOnboarding ? (
+            <OnboardingPage />
+          ) : (
+            <DashboardPage session={session} />
+          )
         ) : (
           <LandingPage onLogin={login} />
         )}
