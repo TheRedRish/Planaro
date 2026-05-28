@@ -155,10 +155,80 @@ export function useScheduling({ accessToken, calendarEvents, weather, onSuccess 
     }
   }, [selectedProposal, reviewQueue, currentReviewIndex, batchPlan, generateProposalsForIndex, executeCommit]);
 
+  const currentTask = reviewQueue[currentReviewIndex] || null;
+
+  const updateProposal = useCallback(async (index: number, newStart: Date) => {
+    if (!currentTask) return;
+    
+    const newEnd = new Date(newStart.getTime() + currentTask.duration_minutes * 60000);
+    
+    const routines = await fetchRoutines();
+    const busyFromRoutines: BusyBlock[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(newStart);
+      d.setDate(d.getDate() + i - 3); // Check a window around the new date
+      d.setHours(0, 0, 0, 0);
+      busyFromRoutines.push(...getBusyBlocksFromRoutines(routines, d));
+    }
+
+    const busyFromCalendar: BusyBlock[] = calendarEvents.map(e => ({
+      start: new Date(e.start.dateTime || e.start.date || ''),
+      end: new Date(e.end.dateTime || e.end.date || ''),
+      title: e.summary,
+    }));
+
+    const busyFromPlan: BusyBlock[] = batchPlan.map(p => ({
+      start: p.start,
+      end: p.end,
+      title: 'Plan'
+    }));
+
+    const allBusy = [...busyFromRoutines, ...busyFromCalendar, ...busyFromPlan];
+
+    const isOutdoor = currentTask.condition_tags?.includes('Outdoor');
+
+    setProposals(prev => {
+      const updated = [...prev];
+      const slot = { start: newStart, end: newEnd, taskId: currentTask.id };
+      
+      const logicTags = [];
+      const conflicts = [];
+      
+      // Basic overlap check
+      const isOverlapping = allBusy.some(block => newStart < block.end && newEnd > block.start);
+      if (isOverlapping) {
+        conflicts.push('Conflicts with existing event or routine');
+      } else {
+        logicTags.push('routine'); // Implicitly fits if no overlap
+      }
+
+      // Weather check
+      if (isOutdoor) {
+        if (isWeatherFavorable(weather, newStart)) {
+          logicTags.push('weather');
+        } else {
+          conflicts.push('Unfavorable weather');
+        }
+      }
+
+      updated[index] = { 
+        ...slot, 
+        logicTags,
+        ...(conflicts.length > 0 ? { conflicts } : {})
+      };
+      
+      if (selectedProposal && selectedProposal.start.getTime() === prev[index].start.getTime()) {
+        setSelectedProposal(updated[index]);
+      }
+      
+      return updated;
+    });
+  }, [currentTask, calendarEvents, weather, batchPlan, selectedProposal]);
+
   return {
     reviewQueue,
     currentReviewIndex,
-    currentTask: reviewQueue[currentReviewIndex] || null,
+    currentTask,
     proposals,
     selectedProposal,
     setSelectedProposal,
@@ -166,6 +236,7 @@ export function useScheduling({ accessToken, calendarEvents, weather, onSuccess 
     committing,
     startReview,
     confirmSelection,
-    cancelReview
+    cancelReview,
+    updateProposal
   };
 }

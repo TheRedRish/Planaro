@@ -60,9 +60,18 @@ export interface BusyBlock {
 
 export function getBusyBlocksFromRoutines(routines: Routine[], date: Date): BusyBlock[] {
   const dayOfWeek = date.getDay() || 7; // Convert 0 (Sunday) to 7
-  return routines
+  
+  // Previous day for checking routines that started yesterday and spilled into today
+  const prevDate = new Date(date);
+  prevDate.setDate(date.getDate() - 1);
+  const prevDayOfWeek = prevDate.getDay() || 7;
+
+  const blocks: BusyBlock[] = [];
+
+  // 1. Check routines scheduled for THIS day
+  routines
     .filter((r) => r.days_of_week.includes(dayOfWeek))
-    .map((r) => {
+    .forEach((r) => {
       const start = new Date(date);
       const [startH, startM] = r.start_time.split(':').map(Number);
       start.setHours(startH, startM, 0, 0);
@@ -71,15 +80,55 @@ export function getBusyBlocksFromRoutines(routines: Routine[], date: Date): Busy
       const [endH, endM] = r.end_time.split(':').map(Number);
       end.setHours(endH, endM, 0, 0);
 
-      // Handle overnight routines (e.g., Sleep 22:00 - 06:00)
       if (end < start) {
-        end.setDate(end.getDate() + 1);
+        // Routine spans midnight (e.g., 23:00 to 07:00).
+        // It starts today and ends tomorrow.
+        const midnight = new Date(date);
+        midnight.setHours(23, 59, 59, 999);
+        
+        // Add the block for today (from start to midnight)
+        blocks.push({
+          start: start,
+          end: midnight,
+          title: r.name,
+        });
+      } else {
+        // Normal routine completely within today
+        blocks.push({
+          start,
+          end,
+          title: r.name,
+        });
       }
-
-      return {
-        start,
-        end,
-        title: r.name,
-      };
     });
+
+  // 2. Check routines scheduled for PREVIOUS day that might spill into today
+  routines
+    .filter((r) => r.days_of_week.includes(prevDayOfWeek))
+    .forEach((r) => {
+      const prevStart = new Date(prevDate);
+      const [startH, startM] = r.start_time.split(':').map(Number);
+      prevStart.setHours(startH, startM, 0, 0);
+
+      const prevEnd = new Date(prevDate);
+      const [endH, endM] = r.end_time.split(':').map(Number);
+      prevEnd.setHours(endH, endM, 0, 0);
+
+      if (prevEnd < prevStart) {
+        // Routine started yesterday and ends today!
+        const startOfToday = new Date(date);
+        startOfToday.setHours(0, 0, 0, 0);
+
+        const endToday = new Date(date);
+        endToday.setHours(endH, endM, 0, 0);
+
+        blocks.push({
+          start: startOfToday,
+          end: endToday,
+          title: r.name,
+        });
+      }
+    });
+
+  return blocks;
 }

@@ -4,6 +4,7 @@ export interface TimeSlot {
   start: Date;
   end: Date;
   logicTags?: string[]; // e.g., ['weather', 'routine']
+  conflicts?: string[]; // e.g., ['Conflicts with an existing event or routine.']
   taskId?: string;
 }
 
@@ -137,8 +138,37 @@ export function generateProposals(
 }
 
 /**
- * Schedules a batch of tasks sequentially, ensuring no overlaps.
+ * Checks a specific time slot against constraints and returns an array of conflict strings.
  */
+export function checkConstraints(
+  slot: TimeSlot,
+  task: { duration_minutes: number; condition_tags?: string[] },
+  busyBlocks: BusyBlock[],
+  weather: WeatherForecast[]
+): string[] {
+  const conflicts: string[] = [];
+  
+  // 1. Check Busy Blocks (Routines & Calendar Events)
+  const isOverlapping = busyBlocks.some(block => {
+    return (slot.start < block.end && slot.end > block.start);
+  });
+  if (isOverlapping) {
+    conflicts.push('Conflicts with an existing event or routine.');
+  }
+
+  // 2. Check Weather
+  const isOutdoor = task.condition_tags?.includes('Outdoor');
+  if (isOutdoor && !isWeatherFavorable(weather, slot.start)) {
+    conflicts.push('Unfavorable weather conditions predicted.');
+  }
+
+  // 3. Past check
+  if (slot.start < new Date()) {
+    conflicts.push('Time slot is in the past.');
+  }
+
+  return conflicts;
+}
 export function scheduleBatch(
   tasks: { id: string; duration_minutes: number; condition_tags?: string[] }[],
   initialBusyBlocks: BusyBlock[],

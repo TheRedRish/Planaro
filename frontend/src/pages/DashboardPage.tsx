@@ -8,6 +8,7 @@ import { useGoogleCalendar } from '@/hooks/useGoogleCalendar';
 import { useScheduling } from '@/hooks/useScheduling';
 import { useWeather } from '@/hooks/useWeather';
 import { fetchScheduledTasks } from '@/services/tasks';
+import { fetchRoutines } from '@/services/routines';
 import { cn } from '@/utils/cn';
 import type { Session } from '@supabase/supabase-js';
 
@@ -22,6 +23,11 @@ export function DashboardPage({ session }: DashboardPageProps) {
   const { data: scheduledTasks = [] } = useQuery({
     queryKey: ['tasks', 'scheduled'],
     queryFn: fetchScheduledTasks,
+  });
+
+  const { data: routines = [] } = useQuery({
+    queryKey: ['routines'],
+    queryFn: fetchRoutines,
   });
 
   const { 
@@ -46,7 +52,8 @@ export function DashboardPage({ session }: DashboardPageProps) {
     committing,
     startReview,
     confirmSelection,
-    cancelReview
+    cancelReview,
+    updateProposal
   } = useScheduling({
     accessToken: session.provider_token ?? undefined,
     calendarEvents: events,
@@ -96,7 +103,10 @@ export function DashboardPage({ session }: DashboardPageProps) {
           batchPlan={batchPlan}
           selectedTask={currentTask}
           scheduledTasks={scheduledTasks}
+          weather={weather}
+          routines={routines}
           onSelectProposal={setSelectedProposal}
+          onUpdateProposal={updateProposal}
           syncing={syncing}
           onSync={sync}
           onLock={lockEvent}
